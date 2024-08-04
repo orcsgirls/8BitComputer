@@ -1,0 +1,22 @@
+OPC   DEC HEX         DESCRIPTION
+-------------------------------------------------------------------------------------
+NOP   00  0000
+LDA   01  0001 aaaa   Load contents of memory address aaaa into register A.
+ADD   02  0010 aaaa   Put content of memory address aaaa into register B, 
+                      add A + B, store result in A.
+SUB   03  0011 aaaa   Put content of memory address aaaa into register B,
+                      substract A - B, store result in register A.
+STA   04  0100 aaaa   Store contents of register A at memory address aaaa.
+LDI   05  0101 vvvv   Load 4 bit immediate value in register A (loads 'vvvv' in A).
+JMP   06  0110 aaaa   Unconditional jump. Set program counter (PC) to aaaa, 
+                      resume execution from that memory address.
+JC    07  0111 aaaa   Jump if carry. Set PC to aaaa when carry flag is set and resume 
+                      from there. When carry flag is not set resume normally.
+JZ    08  1000 aaaa   Jump if zero. As above, but when zero flag is set.
+      09  1001
+      10  1010
+      11  1011
+      12  1100
+      13  1101
+OUT   14  1110        Output register A to 7 segment LED display as decimal.
+HLT   15  1111        Halt execution.
