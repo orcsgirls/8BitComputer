@@ -7,6 +7,6 @@ run by [Oak Ridge Computer Science Girls](https://www.orcsgirls.org). Thank you 
 
 - [Ben Eater's 8-Bit computer](https://eater.net/8bit/)
 - [David Hansels Arduino Interface](https://www.hackster.io/david-hansel/breadboard-computer-programmer-1e7a09)
-- [The-Invent0r Initial PCD Design] (https://github.com/The-Invent0r/8-bit-Computer-PCB)
+- [The-Invent0r Initial PCD Design](https://github.com/The-Invent0r/8-bit-Computer-PCB)
 
 Enjoy.
