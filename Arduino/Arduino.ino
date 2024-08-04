@@ -1,88 +1,29 @@
 // -----------------------------------------------------------------------------
 // Programmer for Ben Eater's Breadboard Computer
 // Copyright (C) 2017 David Hansel
+// Modified (C) 2024 Thomas Proffen
 //
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software Foundation,
-// Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
+// Simplified code to only include the 4Bit Den Eater version.
+// Added more instructions to output.
 // -----------------------------------------------------------------------------
 
 #include <EEPROM.h>
 
-// define if using Arduino with boot loader
-#define HAVE_BOOT_DELAY
-
-// define if using a clock that can go faster than 5kHz
-// (see comments in #ifdef FAST_IO section below)
-//#define FAST_IO
-
-// define if using 8-bit architecture (opcodes that require an
-// address/value argument - such as LDA - require a second byte
-// that specifies the argument). 
-//#define HAVE_8BIT_ARCH
-
 #define MAX_BREAKPOINTS 10
-
 #define PIN_BUS0  2 // first pin connected to bus (plus following 7)
 #define PIN_RO   10 // RO signal
 #define PIN_RI   11 // RI signal
 #define PIN_MI   12 // MI signal
-
 #define PIN_CLK  A0 // clock (analog used as digital in)
 #define PIN_BTN  A1 // LOAD/SAVE buttons (analog in)
 #define PIN_SW   A2 // DIP switches 1-4 (analog in)
-
-
-#ifdef HAVE_BOOT_DELAY
-// If we have a boot delay then use A3 (and a pull-up resistor)
-// to keep the EEPROM's chip enable pin HIGH during boot so the
-// control logic does not start running. Can't use pin 13 because
-// the boot loader flashes that pin on/off/on/off during boot.
 #define PIN_EE   A3
-#else
-// If we don't have a boot delay then we may as well use digital
-// pin 13 for chip enable and keep A3 open for something else.
-#define PIN_EE   13 
-#endif
-
-#ifdef HAVE_8BIT_ARCH
-#define ASM_MAX_LABELS            40
-#define ASM_MAX_LABEL_FORWARD_REF 10
-#else
-// if we only have 16 bytes of memory then
-// we can't define more than 16 labels
-// so we can save some RAM here
 #define ASM_MAX_LABELS            16
 #define ASM_MAX_LABEL_FORWARD_REF 16
-#endif
 
 
-// is monitor operating using 4-bit opcode/4 bit address mode or 
-// 8-bit opcode/8-bit address mode
+// Monitor operating using 4-bit opcode/4 bit address mode 
 static bool mode_4bit = true;
-
-
-#ifndef FAST_IO
-
-// Accessing the Arduino pins using the digitalRead/digitalWrite functions.
-// This is slow because digitalRead/digitalWrite are generic and not efficient.
-// Worst case is the delay between CLK->LOW and MI->HIGH in function read_ram()
-// which takes about 100 microseconds. So if the LOW pulse of the SAP1 clock 
-// is <100us then the memory address register will not get the MI signal on the
-// clock LOW->HIGH transition which means it will not read the address correctly.
-// Assuming a 50% duty cycle for the clock that means that clock frequencies
-// higher than 5000Hz will not work. Note that the Ben Eater's SAP1 clock has
-// a maximum frequency of about 500Hz.
 
 #define CLOCK()           digitalRead(PIN_CLK)
 #define SET_RO_HIGH()     digitalWrite(PIN_RO, HIGH)
@@ -98,60 +39,11 @@ static bool mode_4bit = true;
 #define SET_BUS_INPUT()   { for(int i=PIN_BUS0; i<PIN_BUS0+8; i++) pinMode(i, INPUT);  }
 #define SET_BUS_OUTPUT()  { for(int i=PIN_BUS0; i<PIN_BUS0+8; i++) pinMode(i, OUTPUT); }
 
-byte read_bus()
-{
-  byte res = 0;
-  for(int i=0; i<8; i++) 
-    if( digitalRead(PIN_BUS0+i)==HIGH )
-      res |= 1<<i;
-  return res;    
-}
-
-void write_bus(byte data)
-{
-  for(int i=PIN_BUS0; i<PIN_BUS0+8; i++)
-    { digitalWrite(i, data&1); data /= 2; }
-}
-
-#else
-
-// Accessing the Arduino pins by writing to the port registers directly.
-// This is about 50x faster than the method above - the worst case is a 2 
-// microsecond delay. Should theoretically work with SAP1 clock speeds up 
-// to 250KHz for a 50% duty cycle and has been tested with ~280KHz at 65% 
-// LOW duty cycle (CLK is low for 2.3us, HIGH for 1.3us).
-// However, you have to make sure the PORT*, PIN* and DDR* accesses below correspond
-// properly to the pins used, given your Arduino and setup. The code below works
-// for an Arduino Uno or Pro Mini with the pins indicated by the PIN_* settings above.
-
-#define CLOCK()           (PINC & 0x01)
-#define SET_RO_HIGH()     PORTB |=  0x04
-#define SET_RO_LOW()      PORTB &= ~0x04
-#define SET_RI_HIGH()     PORTB |=  0x08
-#define SET_RI_LOW()      PORTB &= ~0x08
-#define SET_MI_HIGH()     PORTB |=  0x10
-#define SET_MI_LOW()      PORTB &= ~0x10
-#define SET_CS_INPUT()    DDRB  &= ~0x1C
-#define SET_CS_OUTPUT()   DDRB  |=  0x1C
-#define SET_BUS_INPUT()   {DDRB &= ~0x03; DDRD &= ~0xFC;}
-#define SET_BUS_OUTPUT()  {DDRB |=  0x03; DDRD |=  0xFC;}
-#define read_bus()        ((PINB & 0x03) * 64 + (PIND & 0xFC) / 4)
-#define write_bus(data)   { PORTB = (PORTB & ~0x03) | ((data) / 64); PORTD = (PORTD & ~0xFC) | ((data) *  4); }
-
-#ifdef HAVE_BOOT_DELAY
-// using pin A3 (see PIN_EE definition above)
-#define SET_EE_HIGH()     PORTC |=  0x08
-#define SET_EE_LOW()      PORTC &= ~0x08
-#else
-// using pin 13 (see PIN_EE definition above)
-#define SET_EE_HIGH()     PORTB |=  0x20
-#define SET_EE_LOW()      PORTB &= ~0x20
-#endif
-
-#endif
+#define BUFFER_SIZE 256
+byte buffer[BUFFER_SIZE];
+bool print_serial_output = false;
 
 // ------------------------------------------------------------------------------------------
-
 
 struct opcodes_struct
 {
@@ -161,14 +53,11 @@ struct opcodes_struct
   byte        has_arg:1;
 };
 
-
 // opcodes for 4-bit architecture.
 // First is the mnemonic, "#" means immediate argument
 // Second is the opcode (note: low four bits are ignored)
 // Third is number of cycles (in addition to two fetch cycles)
 // Fourth is whether this mnemonic requires an argument
-
-// Changed for ORCSGirls computer - TEP 10/29/2023
 
 struct opcodes_struct opcodes_4bit [] = 
   {
@@ -194,80 +83,27 @@ struct opcodes_struct opcodes_4bit [] =
     {NULL, 0, 0, false}
   };
 
-
-// opcodes for 8-bit architecture
-// (highest 6 bits are opcode, low two bits are ignored)
-struct opcodes_struct opcodes_8bit [] = 
-  {
-#ifdef HAVE_8BIT_ARCH
-    {"NOP  ", B00000000, 0, false},
-    {"LDA  ", B00001000, 3, true},
-    {"LDA #", B00010000, 2, true},
-    {"STA  ", B00011000, 3, true},
-    {"TAB  ", B00100000, 1, false},
-    {"LDB  ", B00101000, 3, true},
-    {"LDB #", B00110000, 2, true},
-    {"STB  ", B00111000, 3, true},
-    {"TBA  ", B01000000, 1, false},
-    {"ADD  ", B01001000, 4, true},
-    {"ADD #", B01010000, 3, true},
-    {"ADB  ", B01011000, 1, false},
-    {"SUB  ", B01100000, 4, true},
-    {"SUB #", B01101000, 3, true},
-    {"SBB  ", B01110000, 1, false},
-    {"DEC  ", B01111000, 2, false},
-    {"INC  ", B10000000, 2, false},
-    {"OUT #", B10001000, 2, true},
-    {"OUT  ", B10010000, 1, false},
-    {"OTB  ", B10011000, 1, false},
-    {"OTM  ", B10100000, 3, true},
-    {"IN   ", B10101000, 1, false},
-    {"INB  ", B10110000, 1, false},
-    {"INM  ", B10111000, 2, true},
-    {"PHA  ", B00000100, 2, false},
-    {"PHB  ", B00010100, 2, false},
-    {"PLA  ", B00100100, 3, false},
-    {"PLB  ", B00110100, 3, false},
-    {"TAS  ", B01000100, 1, false},
-    {"TSA  ", B01010100, 1, false},
-    {"LDS #", B01100100, 2, true},
-    {"JSR  ", B11100100, 4, true},
-    {"RET  ", B11101000, 4, false},
-    //{"J0   ", B00001100, true},
-    //{"JN0  ", B00011100, true},
-    //{"J1   ", B00101100, true},
-    //{"JN1  ", B00111100, true},
-    //{"J2   ", B01001100, true},
-    //{"JN2  ", B01011100, true},
-    {"JO   ", B01101100, 2, true},
-    {"JE   ", B01111100, 2, true},
-    {"JZ   ", B10001100, 2, true},
-    {"JNZ  ", B10011100, 2, true},
-    {"JM   ", B10101100, 2, true},
-    {"JP   ", B10111100, 2, true},
-    {"JC   ", B11001100, 2, true},
-    {"JNC  ", B11011100, 2, true},
-    {"JMP  ", B11101100, 2, true},
-    {"HLT  ", B11111100, 1, false},
-    {".OR  ", B11111110, 0, true},
-    {".BY  ", B11111111, 0, true},
-#endif
-    {NULL, 0, 0, false}
-  };
-
+#define wait_clock_low()  while(CLOCK())
+#define wait_clock_high() while(!CLOCK())
 
 // ------------------------------------------------------------------------------------------
+byte read_bus()
+{
+  byte res = 0;
+  for(int i=0; i<8; i++) 
+    if( digitalRead(PIN_BUS0+i)==HIGH )
+      res |= 1<<i;
+  return res;    
+}
 
-#define BUFFER_SIZE 256
-byte buffer[BUFFER_SIZE];
-bool print_serial_output = false;
+// ------------------------------------------------------------------------------------------
+void write_bus(byte data)
+{
+  for(int i=PIN_BUS0; i<PIN_BUS0+8; i++)
+    { digitalWrite(i, data&1); data /= 2; }
+}
 
-#ifdef HAVE_8BIT_ARCH
-#include <Wire.h>
-#include <I2C_eeprom.h>
-I2C_eeprom i2c_eeprom(0x50);
-#endif
-
+// ------------------------------------------------------------------------------------------
 inline void wait_clock_info(int status)
 {
   unsigned long t = millis() + 2000;
@@ -283,10 +119,7 @@ inline void wait_clock_info(int status)
     }
 }
 
-#define wait_clock_low()  while(CLOCK())
-#define wait_clock_high() while(!CLOCK())
-
-
+// ------------------------------------------------------------------------------------------
 void wait_clock_stop()
 {
   // measure length of one clock cycle
@@ -305,7 +138,7 @@ void wait_clock_stop()
     }
 }
 
-
+// ------------------------------------------------------------------------------------------
 inline void enable_signal_control()
 {
   // set control pins (MI/RI/RO) as outputs and output LOW
@@ -318,7 +151,7 @@ inline void enable_signal_control()
   SET_EE_HIGH();
 }
 
-
+// ------------------------------------------------------------------------------------------
 inline void disable_signal_control(bool wait_clock)
 {
   // Make sure we don't get delayed by an interrupt
@@ -348,7 +181,7 @@ inline void disable_signal_control(bool wait_clock)
   interrupts();
 }
 
-
+// ------------------------------------------------------------------------------------------
 void read_ram(byte *data, byte start, int len)
 {
   byte address;
@@ -385,7 +218,7 @@ void read_ram(byte *data, byte start, int len)
   interrupts();
 }
 
-
+// ------------------------------------------------------------------------------------------
 void write_ram(const byte *data, byte start, int len)
 {
   byte address;
@@ -425,7 +258,7 @@ void write_ram(const byte *data, byte start, int len)
   interrupts();
 }
 
-
+// ------------------------------------------------------------------------------------------
 char *dec2hex(byte v)
 {
   static char buf[3];
@@ -433,7 +266,7 @@ char *dec2hex(byte v)
   return buf;
 }
 
-
+// ------------------------------------------------------------------------------------------
 void print_data(byte *data, int addr, int len)
 {
   for(int i=0; i<len; i++)
@@ -453,7 +286,7 @@ void print_data(byte *data, int addr, int len)
   Serial.println();
 }
 
-
+// ------------------------------------------------------------------------------------------
 bool write_eeprom(byte *buffer, bool internal, unsigned int start, unsigned int size)
 {
   bool res = true;
@@ -465,17 +298,13 @@ bool write_eeprom(byte *buffer, bool internal, unsigned int start, unsigned int 
       for(unsigned int i=0; i<size; i++)
         EEPROM.write(start+i, buffer[i]);
     }
-#ifdef HAVE_8BIT_ARCH
-  else if( !internal && start+size<32768 )
-    i2c_eeprom.writeBlock(start, buffer, size);
-#endif
   else
     res = false;
 
   return res;
 }
 
-
+// ------------------------------------------------------------------------------------------
 bool read_eeprom(byte *buffer, bool internal, unsigned int start, unsigned int size)
 {
   bool res = true;
@@ -487,17 +316,13 @@ bool read_eeprom(byte *buffer, bool internal, unsigned int start, unsigned int s
       for(int i=0; i<size; i++)
         buffer[i] = EEPROM.read(start+i);
     }
-#ifdef HAVE_8BIT_ARCH
-  else if( !internal && start+size<32768 )
-    i2c_eeprom.readBlock(start, buffer, size);
-#endif
   else
     res = false;
 
   return res;
 }
 
-
+// ------------------------------------------------------------------------------------------
 void save_data(bool eeprom_internal, unsigned int eeprom_start, unsigned int ram_start, unsigned int size)
 {
   if( print_serial_output )
@@ -529,7 +354,7 @@ void save_data(bool eeprom_internal, unsigned int eeprom_start, unsigned int ram
     }
 }
 
-
+// ------------------------------------------------------------------------------------------
 void load_data(bool eeprom_internal, unsigned int eeprom_start, unsigned int ram_start, unsigned int size)
 {
   if( print_serial_output )
@@ -554,7 +379,7 @@ void load_data(bool eeprom_internal, unsigned int eeprom_start, unsigned int ram
     }
 }
 
-
+// ------------------------------------------------------------------------------------------
 void load_ram_image(byte num, bool size_4bit)
 {
   if( print_serial_output )
@@ -563,7 +388,7 @@ void load_ram_image(byte num, bool size_4bit)
         Serial.print(F("Loading RAM image #"));
       else
         Serial.print(F("Invalid RAM image number: "));
-        
+      
       Serial.println(num);
     }
 
@@ -573,7 +398,7 @@ void load_ram_image(byte num, bool size_4bit)
     load_data(false, num * 256, 0, 256);
 }
 
-
+// ------------------------------------------------------------------------------------------
 void save_ram_image(byte num, bool size_4bit)
 {
   if( print_serial_output )
@@ -592,7 +417,7 @@ void save_ram_image(byte num, bool size_4bit)
     save_data(false, num * 256, 0, 256);
 }
 
-
+// ------------------------------------------------------------------------------------------
 int read_analog_2bit(int pin)
 {
   int res;
@@ -604,11 +429,10 @@ int read_analog_2bit(int pin)
   else if( v < 700 ) res = 2;
   else               res = 3;
 
-  Serial.println(res);
   return res;
 }
 
-
+// ------------------------------------------------------------------------------------------
 int read_analog_4bit(int pin)
 {
   int res;
@@ -638,7 +462,7 @@ int read_analog_4bit(int pin)
   return res;
 }
 
-
+// ------------------------------------------------------------------------------------------
 int read_dip()
 {
   // DIP switches are labeled 1-4 from left to right which makes
@@ -646,14 +470,14 @@ int read_dip()
   return read_analog_4bit(PIN_SW);
 }
 
-
+// ------------------------------------------------------------------------------------------
 char serial_read_wait()
 {
   while( Serial.available()==0 );
   return Serial.read();    
 }
 
-
+// ------------------------------------------------------------------------------------------
 char hex_char_to_byte(char c)
 {
   if( c>='0' && c<='9' )
@@ -666,7 +490,7 @@ char hex_char_to_byte(char c)
     return -1;
 }
 
-
+// ------------------------------------------------------------------------------------------
 char read_hex_char(bool first)
 {
   char c, cv;
@@ -686,7 +510,7 @@ char read_hex_char(bool first)
     }
 }
 
-
+// ------------------------------------------------------------------------------------------
 int serial_read_byte()
 {
   int res = 0;
@@ -718,10 +542,7 @@ int serial_read_byte()
   return res;
 }
 
-
-// ------------------------------------------------------------------------------
-
-
+// ------------------------------------------------------------------------------------------
 void memory_dump(byte s, byte e)
 {
   if( e==0 )
@@ -743,10 +564,7 @@ void memory_dump(byte s, byte e)
     }
 }
 
-
-// ------------------------------------------------------------------------------
-
-
+// ------------------------------------------------------------------------------------------
 void memory_clear(byte s, byte e, byte v)
 {
   int n = ((int) e) - ((int) s) + 1;
@@ -761,10 +579,7 @@ void memory_clear(byte s, byte e, byte v)
   Serial.println('.');
 }
 
-
-// ------------------------------------------------------------------------------
-
-
+// ------------------------------------------------------------------------------------------
 void memory_update(int a)
 {
   int i = 0, e = 0xff;
@@ -792,10 +607,7 @@ void memory_update(int a)
   Serial.println();
 }
 
-
-// ------------------------------------------------------------------------------
-
-
+// ------------------------------------------------------------------------------------------
 void disassemble(int a = 0, int e = -1)
 {
   while( a <= e || e < 0 )
@@ -805,54 +617,15 @@ void disassemble(int a = 0, int e = -1)
       Serial.print(F(": "));
       read_ram(&b, a++, 1);
       Serial.print(dec2hex(b));
-      if( mode_4bit )
-        {
-          Serial.print(F("   "));
-          Serial.print(opcodes_4bit[b>>4].mnemonic);
-          if( opcodes_4bit[b>>4].has_arg ) Serial.print(dec2hex(b&0x0f));
-          //a &= 15;
-        }
-      else
-        {
-          int i;
-          for(i=0; opcodes_8bit[i].mnemonic!=NULL; i++)
-            if( b==opcodes_8bit[i].opcode )
-              break;
-
-          if( opcodes_8bit[i].has_arg && opcodes_8bit[i].opcode!=0xff )
-            {
-              read_ram(&b, a++, 1);
-              Serial.print(' ');
-              Serial.print(dec2hex(b));
-            }
-          else
-            Serial.print(F("   "));
-          
-          Serial.print(F("   "));
-          if( opcodes_8bit[i].mnemonic==NULL || opcodes_8bit[i].opcode==0xff )
-            {
-              Serial.print(F(".BY $"));
-              Serial.print(dec2hex(b));
-            }
-          else
-            {
-              Serial.print(opcodes_8bit[i].mnemonic);
-              if( opcodes_8bit[i].has_arg ) 
-                {
-                  Serial.print('$');
-                  Serial.print(dec2hex(b));
-                }
-            }
-        }
-
+      Serial.print(F("   "));
+      Serial.print(opcodes_4bit[b>>4].mnemonic);
+      if( opcodes_4bit[b>>4].has_arg ) Serial.print(dec2hex(b&0x0f));
       Serial.println();
       if( e<0 && serial_read_wait()!=32 ) break;
     }
 }
 
-
-// ------------------------------------------------------------------------------
-
+// ------------------------------------------------------------------------------------------
 
 struct label_struct {
   char label[3];
@@ -890,7 +663,7 @@ struct label_struct *find_label(char *lbl, int llen)
   return res;
 }
 
-
+// ------------------------------------------------------------------------------------------
 bool parse_arg(byte *buffer, int len, int &i, byte &value, bool force_hex = false)
 {
   bool res = false;
@@ -930,10 +703,10 @@ bool parse_arg(byte *buffer, int len, int &i, byte &value, bool force_hex = fals
   return res;
 }
 
-
+// ------------------------------------------------------------------------------------------
 void assemble(int addr)
 {
-  struct opcodes_struct *opcodes = mode_4bit ? opcodes_4bit : opcodes_8bit;
+  struct opcodes_struct *opcodes = opcodes_4bit;
 
   int a = addr;
   num_labels = 0;
@@ -1245,12 +1018,8 @@ void assemble(int addr)
     }
 }
 
-
-// ------------------------------------------------------------------------------
-
-
+// ------------------------------------------------------------------------------------------
 byte num_breakpoints, breakpoints[10];
-
 
 void save_breakpoints()
 {
@@ -1258,7 +1027,6 @@ void save_breakpoints()
     EEPROM.write(1021-i, breakpoints[i]);
   EEPROM.write(1022, num_breakpoints);
 }
-
 
 void load_breakpoints()
 {
@@ -1271,7 +1039,6 @@ void load_breakpoints()
     }
 }
 
-
 void show_breakpoints()
 {
   Serial.print(F("Breakpoints at:"));
@@ -1282,7 +1049,6 @@ void show_breakpoints()
     }
   Serial.println();
 }
-
 
 bool check_breakpoint(byte pc)
 {
@@ -1301,7 +1067,7 @@ bool check_breakpoint(byte pc)
   return false;
 }
 
-
+// ------------------------------------------------------------------------------------------
 byte get_pc()
 {
   byte pc;
@@ -1344,11 +1110,10 @@ byte get_pc()
   return pc;
 }
 
-
 void set_pc(byte pc)
 {
   byte n, data[2], jmp[2], current_pc = get_pc();
-  struct opcodes_struct *opcodes = mode_4bit ? opcodes_4bit : opcodes_8bit;
+  struct opcodes_struct *opcodes = opcodes_4bit;
 
   // if we're already at address "pc" then there is nothing to do
   if( current_pc == pc ) return;
@@ -1382,25 +1147,14 @@ void set_pc(byte pc)
   write_ram(data, current_pc, n);
 }
 
-
+// ------------------------------------------------------------------------------------------
 bool run(int num_instructions)
 {
   bool first = true;
   byte pc, i=0, j, opcode, num_cycles, hlt;
-
-  // create a fast access mapping from opcode to number of cycles
-  if( mode_4bit )
-    {
-      hlt = B11110000;
-      for(int i=0; opcodes_4bit[i].mnemonic!=NULL; i++)
-        buffer[opcodes_4bit[i].opcode & 0xF0] = opcodes_4bit[i].num_cycles;
-    }
-  else
-    {
-      hlt = B11111100;
-      for(int i=0; opcodes_8bit[i].mnemonic!=NULL; i++)
-        buffer[opcodes_8bit[i].opcode & 0xFC] = opcodes_8bit[i].num_cycles;
-    }
+  hlt = B11110000;
+  for(int i=0; opcodes_4bit[i].mnemonic!=NULL; i++)
+    buffer[opcodes_4bit[i].opcode & 0xF0] = opcodes_4bit[i].num_cycles;
 
   // make sure counter i (of type byte) can never get greater than
   // num_instructions if requested to run indefinitely
@@ -1508,23 +1262,12 @@ bool run(int num_instructions)
     return true;
 }
 
-
-// ------------------------------------------------------------------------------
-
-
+// ------------------------------------------------------------------------------------------
 void monitor()
 {
-  Serial.println(F("\nEntering monitor...\n"));
+  Serial.println(F("\nEntering monitor ORCSGirls edition ...\n"));
   wait_clock_info(LOW);
   wait_clock_info(HIGH);
-
-#ifdef HAVE_8BIT_ARCH
-  mode_4bit = EEPROM.read(1023)!=0;
-  if( mode_4bit )
-    Serial.println(F("Using 4-bit address instruction set."));
-  else
-    Serial.println(F("Using 8-bit address instruction set."));
-#endif
 
   load_breakpoints();
   if( num_breakpoints>0 ) {Serial.print('\n'); show_breakpoints();}
@@ -1782,33 +1525,22 @@ void monitor()
 
                 break;
               }
-              
-#ifdef HAVE_8BIT_ARCH
-            case '4': 
-              {
-                if( !mode_4bit )
-                  {
-                    mode_4bit = true;
-                    EEPROM.write(1023, mode_4bit);
-                    Serial.println(F("\nSwitched to 4-bit address instruction set."));
-                  }
-                break;
-              }
-
-            case '8': 
-              {
-                if( mode_4bit )
-                  {
-                    mode_4bit = false;
-                    EEPROM.write(1023, mode_4bit);
-                    Serial.println(F("\nSwitched to 8-bit address instruction set."));
-                  }
-                break;
-              }
-#endif
-
             case 'x': 
               go = false;
+              break;
+
+            case 'h':
+              Serial.println(F("\nInstruction set:"));
+              Serial.println(F("LDA addr      Load value in memory address addr into A register       b0001"));
+              Serial.println(F("ADD addr      Add value in memory address addr to A register          b0010")); 
+              Serial.println(F("SUB addr      Subtract value in memory address addr from A register   b0011"));
+              Serial.println(F("STA addr      Write value in A register to memory address addr        b0100"));
+              Serial.println(F("LDI value     Store value in A register directly                      b0101"));
+              Serial.println(F("JMP addr      Jump to address addr                                    b0110"));
+              Serial.println(F("JC addr       Jump to address addr if carry flag is set               b0111"));
+              Serial.println(F("JMP addr      Jump to address addr if zero flag is set                b1000"));
+              Serial.println(F("OUT           Display value in A register on number display           b1110"));
+              Serial.println(F("HLT           Halt program                                            b1111"));
               break;
 
             default:
@@ -1825,10 +1557,7 @@ void monitor()
               Serial.println(F("B a           Remove breakpoint at address a (if a=* then remove all)"));
               Serial.println(F("s n           Save RAM image to EEPROM file #n"));
               Serial.println(F("l n           Load RAM image from EEPROM file #n"));
-#ifdef HAVE_8BIT_ARCH
-              Serial.println(F("4             Switch to 4-bit address instruction set"));
-              Serial.println(F("8             Switch to 8-bit address instruction set"));
-#endif
+              Serial.println(F("h             Show help\n"));
               Serial.println(F("x             Exit monitor\n"));
               break;
             }
@@ -1839,23 +1568,10 @@ void monitor()
   wait_clock_stop();
 }
 
-
-// ------------------------------------------------------------------------------------
-
-
+// ------------------------------------------------------------------------------------------
 void setup() 
 {
-#ifdef HAVE_BOOT_DELAY
-  // If we have a boot delay then the computer is ready
-  // to take steps by now if we disable signal control
-  // by the Arduino. We need to prevent that (may hit a 
-  // HLT during execution)
   enable_signal_control();
-#else
-  // The computer is still resetting, no need to enable
-  // signal control unless we know we need it
-  disable_signal_control(false);
-#endif
   pinMode(PIN_CLK, INPUT);
   pinMode(PIN_EE, OUTPUT);
   Serial.begin(9600);
@@ -1878,47 +1594,15 @@ void setup()
           Serial.println(prog);
         }
 
-#ifndef HAVE_BOOT_DELAY
-      // We don't have the delay associated with the boot loader
-      // so the Arduino may be ready before reset goes high again
-      // (Arduino resets at the high-low edge of the reset signal).
-      // We need to wait until reset is high before we can successfully
-      // write to memory. Since we don't have access to the reset
-      // signal itself we identify this by waiting until we can 
-      // successfully write/read two different memory addresses
-      // (the memory address register is locked at 0 while reset is active)
-      // We can be destructive here since our next step is to upload
-      // a program (and overwrite memory) anyways.
-      while( true )
-        { 
-          byte d[2] = {0x55, 0xAA};
-          write_ram(d, 0, 2);
-          read_ram(d, 0, 2); 
-          if( d[0]==0x55 && d[1]==0xAA ) break;
-          delay(100);
-        }
-#endif
-
-      // load the program
-#ifdef HAVE_8BIT_ARCH
-      if( prog<8 ) 
-        load_ram_image(prog, true);
-      else
-        load_ram_image(prog-8, false);
-#else
       load_ram_image(prog, true);
-#endif    
-      // return control to EEPROM
       disable_signal_control(true);
     }
-#ifdef HAVE_BOOT_DELAY
   else
     {
       // we enabled signal control above so we must
       // make sure to disable it before exiting setup
       disable_signal_control(false);
     }
-#endif    
 }
 
 
@@ -1928,16 +1612,9 @@ void loop()
 
   while( Serial.available()>0 ) Serial.read();
 
-#ifdef PIN_BTN
   if( print_serial_output )
     Serial.println(F("\nWaiting for LOAD or SAVE button or ESC to enter monitor..."));
   while( (btn=read_analog_2bit(PIN_BTN))==0 && Serial.available()==0 );
-#else
-  if( print_serial_output )
-    Serial.println(F("\nWaiting for ESC to enter monitor..."));
-  while( Serial.available()==0 );
-#endif
-
   print_serial_output = Serial.available()>0;
 
   if( Serial.read()==27 )
@@ -1953,26 +1630,12 @@ void loop()
       int dip = read_dip();
       if( btn & 1 )
         { 
-#ifdef HAVE_8BIT_ARCH
-          if( dip<8 ) 
-            save_ram_image(dip, true);
-          else
-            save_ram_image(dip-8, false);
-#else
           save_ram_image(dip, true);
-#endif
           wait_clock_stop();
         }
       else if ( btn & 2 )
         { 
-#ifdef HAVE_8BIT_ARCH
-          if( dip<8 ) 
-            load_ram_image(dip, true);
-          else
-            load_ram_image(dip-8, false);
-#else
           load_ram_image(dip, true);
-#endif
           wait_clock_stop();
         }
 
