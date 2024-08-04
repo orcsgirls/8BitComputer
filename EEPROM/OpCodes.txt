@@ -20,3 +20,24 @@ JZ    08  1000 aaaa   Jump if zero. As above, but when zero flag is set.
       13  1101
 OUT   14  1110        Output register A to 7 segment LED display as decimal.
 HLT   15  1111        Halt execution.
+
+--------------------------------------------------------------------------------------------------
+
+Control Bits
+============
+01  HLT   Halt the computer
+02  MI    Memory address register in
+03  RI    RAM in
+04  RO    RAM out
+05  II    Instruction register in
+06  IO    Instruction register out (not needed with 256B RAM mod)
+07  AI    Register A in
+08  AO    Register A out
+09  EO    ALU sum out
+10  SU    Switch ALU to substract (otherwise add)
+11  BI    Register B in  
+12  OI    Output in (display bus value on 7segment display as decimal value)
+13  CE    Counter enable (increment program counter PC)
+14  CO    Counter out (Put program counter value on bus)
+15  J     Jump (Counter in = read bus into program counter)
+16  FI    Flags register in (store alu flags in flags register)
