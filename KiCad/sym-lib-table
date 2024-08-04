@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "8 Bit Computer-rescue")(type "KiCad")(uri "${KIPRJMOD}/8 Bit Computer-rescue.kicad_sym")(options "")(descr ""))
+)
