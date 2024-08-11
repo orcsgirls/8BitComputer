@@ -70,11 +70,11 @@ struct opcodes_struct opcodes_4bit [] =
     {"JMP  ", B01100000, 3, true},
     {"JC   ", B01110000, 3, true},
     {"JZ   ", B10000000, 3, true},
-    {"NOP  ", B10010000, 3, false},
-    {"NOP  ", B10100000, 3, false},
-    {"NOP  ", B10110000, 3, false},
-    {"NOP  ", B11000000, 3, false},
-    {"NOP  ", B11010000, 3, false},
+    {"DSP  ", B10010000, 3, true},
+    {"INC  ", B10100000, 3, true},
+    {"DEC  ", B10110000, 3, true},
+    {"JNZ  ", B11000000, 3, true},
+    {"JNC  ", B11010000, 3, true},
     {"OUT  ", B11100000, 3, false},
     {"HLT  ", B11110000, 3, false},
     // following are pseudo-opcodes used by assembler/disassembler
@@ -1537,8 +1537,13 @@ void monitor()
               Serial.println(F("STA addr      Write value in A register to memory address addr        b0100"));
               Serial.println(F("LDI value     Store value in A register directly                      b0101"));
               Serial.println(F("JMP addr      Jump to address addr                                    b0110"));
-              Serial.println(F("JC addr       Jump to address addr if carry flag is set               b0111"));
-              Serial.println(F("JMP addr      Jump to address addr if zero flag is set                b1000"));
+              Serial.println(F("JC  addr      Jump to address addr if carry flag is set               b0111"));
+              Serial.println(F("JZ  addr      Jump to address addr if zero flag is set                b1000"));
+              Serial.println(F("DSP addr      Display value at address addr on number display         b1001"));
+              Serial.println(F("INC value     Add value to register A                                 b1010"));
+              Serial.println(F("DEC value     Subtract value from register A                          b1011"));
+              Serial.println(F("JNZ  ddr      Jump to address addr if zero flag is NOT set            b1100"));
+              Serial.println(F("JNC  ddr      Jump to address addr if carry flag is NOT set           b1101"));
               Serial.println(F("OUT           Display value in A register on number display           b1110"));
               Serial.println(F("HLT           Halt program                                            b1111"));
               break;
@@ -1605,7 +1610,7 @@ void setup()
     }
 }
 
-
+// ------------------------------------------------------------------------------------------
 void loop() 
 {
   int btn = 0;
