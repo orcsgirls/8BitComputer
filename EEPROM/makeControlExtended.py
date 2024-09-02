@@ -1,4 +1,5 @@
 # Version with conditional jumps
+import numpy as np
 
 def formatBits(number,nbits):
     bits=bin(number)
@@ -54,11 +55,11 @@ template = [
   [MI|CO,  RO|II|CE,  HLT,       0,           0,            0, 0, 0],   # 1111 - HLT
 ]
 
-ucode = [template, template, template, template]   # Four copies for the four flag combinations
+ucode = np.array([template for _ in range(4)])   # Four copies for the four flag combinations
 
 # Modification for JC, JZ, JNZ and JNC
+
 ucode[FLAGS_Z0C1][JC][2] = IO|J;
-ucode[FLAGS_Z1C0][JZ][2] = IO|J;
 ucode[FLAGS_Z1C1][JC][2] = IO|J;
 ucode[FLAGS_Z1C1][JZ][2] = IO|J;
 ucode[FLAGS_Z0C1][JNZ][2] = IO|J;
