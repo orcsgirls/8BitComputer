@@ -10,14 +10,14 @@ STA   04  0100 aaaa   Store contents of register A at memory address aaaa.
 LDI   05  0101 vvvv   Load 4 bit immediate value in register A (loads 'vvvv' in A).
 JMP   06  0110 aaaa   Unconditional jump. Set program counter (PC) to aaaa, 
                       resume execution from that memory address.
-JC    07  0111 aaaa   Jump if carry. Set PC to aaaa when carry flag is set and resume 
+JC    07  0111 aaaa   Jump if carry. Set PC to aaaa when CARRY flag is set and resume 
                       from there. When carry flag is not set resume normally.
-JZ    08  1000 aaaa   Jump if zero. As above, but when zero flag is set.
-      09  1001
-      10  1010
-      11  1011
-      12  1100
-      13  1101
+JZ    08  1000 aaaa   Jump if zero. As above, but when ZERO flag is set.
+DSI   09  1001 vvvv   Outputs the value vvvv on 7 segment LED display
+INC   10  1010 vvvv   Adds value vvvv to A register (increment)
+DEC   11  1011 vvvv   Subtracts value vvvv to A register (increment)
+LDB   12  1100 aaaa   Load contents of memory address aaaa into register B
+DSP   13  1101 aaaa   Outputs the value at address aaaa on 7 segment LED display
 OUT   14  1110        Output register A to 7 segment LED display as decimal.
 HLT   15  1111        Halt execution.
 
@@ -40,4 +40,4 @@ Control Bits
 13  CE    Counter enable (increment program counter PC)
 14  CO    Counter out (Put program counter value on bus)
 15  J     Jump (Counter in = read bus into program counter)
-16  FI    Flags register in (store alu flags in flags register)
+16  FI    Flags register in (store ALU flags in flags register)

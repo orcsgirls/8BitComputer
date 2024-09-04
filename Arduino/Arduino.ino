@@ -41,7 +41,7 @@ static bool mode_4bit = true;
 
 #define BUFFER_SIZE 256
 byte buffer[BUFFER_SIZE];
-bool print_serial_output = false;
+bool print_serial_output = true;
 
 // ------------------------------------------------------------------------------------------
 
@@ -1539,11 +1539,11 @@ void monitor()
               Serial.println(F("JMP addr      Jump to address addr                                    b0110"));
               Serial.println(F("JC  addr      Jump to address addr if carry flag is set               b0111"));
               Serial.println(F("JZ  addr      Jump to address addr if zero flag is set                b1000"));
-              Serial.println(F("DSP addr      Display value at address addr on number display         b1001"));
+              Serial.println(F("DSI value     Display value on number display                         b1001"));
               Serial.println(F("INC value     Add value to register A                                 b1010"));
               Serial.println(F("DEC value     Subtract value from register A                          b1011"));
-              Serial.println(F("JNZ  ddr      Jump to address addr if zero flag is NOT set            b1100"));
-              Serial.println(F("JNC  ddr      Jump to address addr if carry flag is NOT set           b1101"));
+              Serial.println(F("LDB addr      Load value in memory address addr into B register       b1100"));
+              Serial.println(F("DSP addr      Outputs value at address vvvvv on number display        b1101"));
               Serial.println(F("OUT           Display value in A register on number display           b1110"));
               Serial.println(F("HLT           Halt program                                            b1111"));
               break;

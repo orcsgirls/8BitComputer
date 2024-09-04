@@ -1,0 +1,16 @@
+# Simple program to count up to 255
+# and back down to 0 and then up again ..
+
+00: 1f   LDA  0f                                                                                                                                      
+01: 2e   ADD  0e                                                                                                                                      
+02: 75   JC   05                                                                                                                                      
+03: e0   OUT                                                                                                                                          
+04: 61   JMP  01                                                                                                                                      
+05: 3e   SUB  0e                                                                                                                                      
+06: e0   OUT                                                                                                                                          
+07: 81   JZ   01                                                                                                                                      
+08: 65   JMP  05                                                                                                                                                                                                                                                                             
+                                                                                                                                       
+0e: 01   Value to increament                                                                                                                                          
+0f: aa   Starting value
+ 

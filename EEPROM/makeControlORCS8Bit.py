@@ -1,4 +1,5 @@
-# Version with conditional jumps
+# This is the code set for the 8Bit ORCSGirls computers
+
 import numpy as np
 
 def formatBits(number,nbits):
@@ -31,41 +32,35 @@ FLAGS_Z0C1 = 0b01
 FLAGS_Z1C0 = 0b10
 FLAGS_Z1C1 = 0b11
 
-JC  = 0b0111
-JZ  = 0b1000
-JNZ = 0b1100
-JNC = 0b1101
+JC = 0b0111
+JZ = 0b1000
 
 template = [
-  [MI|CO,  RO|II|CE,  0,         0,           0,            0, 0, 0],   # 0000 - NOP
-  [MI|CO,  RO|II|CE,  IO|MI,     RO|AI,       0,            0, 0, 0],   # 0001 - LDA
-  [MI|CO,  RO|II|CE,  IO|MI,     RO|BI,       EO|AI|FI,     0, 0, 0],   # 0010 - ADD
-  [MI|CO,  RO|II|CE,  IO|MI,     RO|BI,       EO|AI|SU|FI,  0, 0, 0],   # 0011 - SUB
-  [MI|CO,  RO|II|CE,  IO|MI,     AO|RI,       0,            0, 0, 0],   # 0100 - STA
-  [MI|CO,  RO|II|CE,  IO|AI,     0,           0,            0, 0, 0],   # 0101 - LDI
-  [MI|CO,  RO|II|CE,  IO|J,      0,           0,            0, 0, 0],   # 0110 - JMP
-  [MI|CO,  RO|II|CE,  0,         0,           0,            0, 0, 0],   # 0111 - JC
-  [MI|CO,  RO|II|CE,  0,         0,           0,            0, 0, 0],   # 1000 - JZ
-  [MI|CO,  RO|II|CE,  IO|MI,     RO|OI,       0,            0, 0, 0],   # 1001 - DSP
-  [MI|CO,  RO|II|CE,  IO|BI,     EO|AI|FI,    0,            0, 0, 0],   # 1010 - INC
-  [MI|CO,  RO|II|CE,  IO|BI,     EO|AI|SU|FI, 0,            0, 0, 0],   # 1011 - DEC
-  [MI|CO,  RO|II|CE,  0,         0,           0,            0, 0, 0],   # 1100 - JNZ
-  [MI|CO,  RO|II|CE,  0,         0,           0,            0, 0, 0],   # 1101 - JNC
-  [MI|CO,  RO|II|CE,  AO|OI,     0,           0,            0, 0, 0],   # 1110 - OUT
-  [MI|CO,  RO|II|CE,  HLT,       0,           0,            0, 0, 0],   # 1111 - HLT
+  [MI|CO,  RO|II|CE,  0,      0,           0,            0, 0, 0],   # 0000 - NOP
+  [MI|CO,  RO|II|CE,  IO|MI,  RO|AI,       0,            0, 0, 0],   # 0001 - LDA
+  [MI|CO,  RO|II|CE,  IO|MI,  RO|BI,       EO|AI|FI,     0, 0, 0],   # 0010 - ADD
+  [MI|CO,  RO|II|CE,  IO|MI,  RO|BI,       EO|AI|SU|FI,  0, 0, 0],   # 0011 - SUB
+  [MI|CO,  RO|II|CE,  IO|MI,  AO|RI,       0,            0, 0, 0],   # 0100 - STA
+  [MI|CO,  RO|II|CE,  IO|AI,  0,           0,            0, 0, 0],   # 0101 - LDI
+  [MI|CO,  RO|II|CE,  IO|J,   0,           0,            0, 0, 0],   # 0110 - JMP
+  [MI|CO,  RO|II|CE,  0,      0,           0,            0, 0, 0],   # 0111 - JC
+  [MI|CO,  RO|II|CE,  0,      0,           0,            0, 0, 0],   # 1000 - JZ
+  [MI|CO,  RO|II|CE,  IO|OI,  0,           0,            0, 0, 0],   # 1001 - DSI
+  [MI|CO,  RO|II|CE,  IO|BI,  EO|AI|FI,    0,            0, 0, 0],   # 1010 - INC
+  [MI|CO,  RO|II|CE,  IO|BI,  EO|AI|SU|FI, 0,            0, 0, 0],   # 1011 - DEC
+  [MI|CO,  RO|II|CE,  IO|MI,  RO|BI,       0,            0, 0, 0],   # 1100 - LDB
+  [MI|CO,  RO|II|CE,  IO|MI,  RO|OI,       0,            0, 0, 0],   # 1101 - DSP
+  [MI|CO,  RO|II|CE,  AO|OI,  0,           0,            0, 0, 0],   # 1110 - OUT
+  [MI|CO,  RO|II|CE,  HLT,    0,           0,            0, 0, 0],   # 1111 - HLT
 ]
 
-ucode = np.array([template for _ in range(4)])   # Four copies for the four flag combinations
+ucode = np.array([template, template, template, template])   # Four copies for the four flag combinations
 
-# Modification for JC, JZ, JNZ and JNC
-
+# Modification for JC and JZ
 ucode[FLAGS_Z0C1][JC][2] = IO|J;
 ucode[FLAGS_Z1C1][JC][2] = IO|J;
+ucode[FLAGS_Z1C0][JZ][2] = IO|J;
 ucode[FLAGS_Z1C1][JZ][2] = IO|J;
-ucode[FLAGS_Z0C1][JNZ][2] = IO|J;
-ucode[FLAGS_Z0C0][JNZ][2] = IO|J;
-ucode[FLAGS_Z0C0][JNC][2] = IO|J;
-ucode[FLAGS_Z1C0][JNC][2] = IO|J;
 
 # Empty binary array
 control = bytearray([0x00] * 2048)
@@ -89,6 +84,6 @@ for addr in range(1024):
         control[addr]= (ucode[flags][instruction][step] >> 8)
 
 # Write file
-with open("controlExtended.bin", "wb") as out_file:
+with open("controlORCS8Bit.bin", "wb") as out_file:
     out_file.write(control)
 
