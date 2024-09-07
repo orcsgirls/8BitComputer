@@ -11,6 +11,6 @@
 07: 81   JZ   01                                                                                                                                      
 08: 65   JMP  05                                                                                                                                                                                                                                                                             
                                                                                                                                        
-0e: 01   Value to increament                                                                                                                                          
+0e: 01   Value to increment                                                                                                                                          
 0f: aa   Starting value
  
