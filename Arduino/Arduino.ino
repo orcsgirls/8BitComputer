@@ -42,6 +42,7 @@ static bool mode_4bit = true;
 #define BUFFER_SIZE 256
 byte buffer[BUFFER_SIZE];
 bool print_serial_output = true;
+bool auto_load = false;
 
 // ------------------------------------------------------------------------------------------
 
@@ -1581,32 +1582,37 @@ void setup()
   pinMode(PIN_EE, OUTPUT);
   Serial.begin(9600);
 
-  int prog = read_dip();
-  if( prog == 0x0f )
+  if( auto_load ) 
     {
-      enable_signal_control();
-      print_serial_output = true;
-      monitor();
-      disable_signal_control(false);
-    }
-  else if( prog>0 )
-    {
-      enable_signal_control();
+    int prog = read_dip();
+    if( prog == 0x0f )
+      {
+        enable_signal_control();
+        print_serial_output = true;
+        monitor();
+        disable_signal_control(false);
+      }
+    else if( prog>0 )
+      {
+        enable_signal_control();
 
-      if( print_serial_output )
-        {
-          Serial.print(F("Auto-run RAM image #"));
-          Serial.println(prog);
-        }
+        if( print_serial_output )
+          {
+            Serial.print(F("Auto-run RAM image #"));
+            Serial.println(prog);
+          }
 
-      load_ram_image(prog, true);
-      disable_signal_control(true);
+        load_ram_image(prog, true);
+        disable_signal_control(true);
+      }
+    else
+      {
+        disable_signal_control(false); 
+      }
     }
-  else
+  else 
     {
-      // we enabled signal control above so we must
-      // make sure to disable it before exiting setup
-      disable_signal_control(false);
+      disable_signal_control(false); 
     }
 }
 
