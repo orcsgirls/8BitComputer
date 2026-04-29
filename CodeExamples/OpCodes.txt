@@ -41,3 +41,24 @@ Control Bits
 14  CO    Counter out (Put program counter value on bus)
 15  J     Jump (Counter in = read bus into program counter)
 16  FI    Flags register in (store ALU flags in flags register)
+
+--------------------------------------------------------------------------------------------------
+
+Assembler Instructions
+======================
+The assembler is minimal but works pretty well. Type "a" to start assembling at address 0. 
+Conventions are:
+
+*  If a line starts does not start with a whitespace then it must start with a 
+   label definition. Labels must start with an alphabetic character followed by 
+   alphanumeric characters, can be at most 3 characters long and are case sensitive.
+*  After the first whitespace in a line, the assembler expects a mnemonic (LDA, STA, OUT...).
+*  Special mnemonic ".BY" directly specifies a data byte to be stored at the current location.
+*  Special mnemonic ".OR" tells the assembler to continue assembling at a new address.
+*  If an argument starts with a alphabetic character then it is assumed to be a label.
+*  Any numeric argument is expected to be a decimal number. To specify hexadecimal, precede 
+   the argument with a "$". For example, to load hexadecimal FF number into the A register, 
+   use "LDA #$FF".
+*  Anything after a ";" is assumed to be a comment and ignored.
+
+NOTE: Arguments to monitor commands are expected to be hexadecimal.
